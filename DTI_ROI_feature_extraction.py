@@ -16,27 +16,39 @@ warnings.filterwarnings('ignore')
 
 
 class FeatureExtractor:
-    def __init__(self, data_dir, results_dir, dti_filename, atlas_filename):
+    def __init__(self, data_dir, results_dir, atlas_dir, atlas_filename, session):
+        """
+        data dir: where the subject directories and atlas files are present
+        data files: subject specific data directory
+        """
         self.data_dir = data_dir
+        self.atlas_dir = atlas_dir
         self.results_dir = results_dir
-        self.dti_filename = dti_filename
         self.atlas_filename = atlas_filename
+        self.session = session
 
+    def load_data(self, sub_dti_dir):
         # set the DTI and atlas file paths -- assuming that the DTI file is preprocessed
-        self.data_files = os.path.join(self.data_dir, 'sherbrooke_3shell')
-        self.bvals_file = os.path.join(self.data_files, f'{dti_filename}.bval') 
-        self.bvecs_file = os.path.join(self.data_files, f'{dti_filename}.bvec')
-        self.img_file = os.path.join(self.data_files, f'{dti_filename}.nii.gz')  
-        self.atlas_file = os.path.join(self.data_dir, f'{atlas_filename}.nii.gz')  
 
+        self.sub_dti_dir = sub_dti_dir
 
-    def load_data(self):
+        self.data_files = os.path.join(self.data_dir, sub_dti_dir, "DTI")
+        self.bvals_file = os.path.join(self.data_files, f'{self.sub_dti_dir}_{self.session}.bval') 
+        self.bvecs_file = os.path.join(self.data_files, f'{self.sub_dti_dir}_{self.session}.bvec')
+        self.img_file = os.path.join(self.data_files, f'{self.sub_dti_dir}_{self.session}.nii.gz')  # the preprocessed dti nifti file with slices 
+
+        self.atlas_file = os.path.join(self.atlas_dir, f'{atlas_filename}.nii.gz')  
+        self.labels_path = os.path.join(self.atlas_dir, f'{atlas_filename}_labels.csv')
+
         # Load data
         self.img = nib.load(self.img_file)
         self.atlas = nib.load(self.atlas_file)
         self.bvals = np.loadtxt(self.bvals_file)
         self.bvecs = np.loadtxt(self.bvecs_file)
         print(f"Data loaded: DTI img = {self.img.shape}, Atlas = {self.atlas.shape}, B-val = {self.bvals.shape}, B-vec = {self.bvecs.shape}")
+
+        self.aal_labels = pd.read_csv(self.labels_path)
+
 
     def def_tensor_model(self):
         # gradient_table needs to be constructed when the gtab_file is not directly usable
@@ -85,7 +97,7 @@ class FeatureExtractor:
 
         print(f"Size of the extracted features for this DTI image: {df.shape}")
         print(df.head())
-        df.to_csv(f'{self.results_dir}/SUB-{self.dti_filename}-dti_metrics_by_roi.csv', index=False)
+        df.to_csv(f'{self.results_dir}/{self.sub_dti_dir}_{self.session}-dti_metrics_by_roi.csv', index=False)
 
 
 if __name__ == "__main__":
@@ -95,12 +107,14 @@ if __name__ == "__main__":
                         -- results directory 
     """
     main_dir = "/media/ist/Drive2/MANSOOR/Neuroimaging-Project/DTI-Analysis"
-    data_dir = f"{main_dir}/Data/test"
-    results_dir = f"{main_dir}/results"
-    dti_filename = "HARDI193"
+    session = "post" # change it to pre or post
+    data_dir = f"{main_dir}/Data/{session}/"
+    atlas_dir = f"{main_dir}/Data/atlas/"
+    results_dir = f"{main_dir}/DTI-Analysis-Scripts/dti-features"
     atlas_filename = "AAL"
 
-    DTI_feat_extractor = FeatureExtractor(data_dir, results_dir, dti_filename, atlas_filename)
-    DTI_feat_extractor.load_data()
-    DTI_feat_extractor.def_tensor_model()
-    DTI_feat_extractor.extract_save_features()
+    DTI_feat_extractor = FeatureExtractor(data_dir, results_dir, atlas_dir, atlas_filename, session)
+    for sub_dti_dir in os.listdir(data_dir):
+        DTI_feat_extractor.load_data(sub_dti_dir)
+        DTI_feat_extractor.def_tensor_model()
+        DTI_feat_extractor.extract_save_features()
